@@ -72,10 +72,10 @@ func Sample(idx *suffixarray.Index, context string, temp float64) string {
 	return ""
 }
 
-// Generate generates text by repeatedly sampling the next token
-func Generate(idx *suffixarray.Index, prompt string, maxTokens int, temp float64) string {
+// Generate generates text until maxChars is reached
+func Generate(idx *suffixarray.Index, prompt string, maxChars int, temp float64) string {
 	result := prompt
-	for i := 0; i < maxTokens; i++ {
+	for len(result) < maxChars {
 		contextStart := 0
 		if len(result) > 200 {
 			contextStart = len(result) - 200
