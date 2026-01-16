@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"index/suffixarray"
+	"math"
 	"math/rand"
 	"os"
 )
@@ -41,8 +42,8 @@ func GetNextTokenCounts(idx *suffixarray.Index, context string) map[string]int {
 	return counts
 }
 
-// Sample samples a token from the distribution, trying progressively shorter suffixes
-func Sample(idx *suffixarray.Index, context string) string {
+// Sample samples a token from the distribution with temperature
+func Sample(idx *suffixarray.Index, context string, temp float64) string {
 	for i := 0; i < len(context); i++ {
 		suffix := context[i:]
 		counts := GetNextTokenCounts(idx, suffix)
@@ -50,14 +51,19 @@ func Sample(idx *suffixarray.Index, context string) string {
 			continue
 		}
 
-		// Calculate total and sample
-		var total int
-		for _, cnt := range counts {
-			total += cnt
-		}
-		r := rand.Intn(total)
+		// Apply temperature scaling
+		weights := make(map[string]float64)
+		var total float64
 		for tok, cnt := range counts {
-			r -= cnt
+			w := math.Pow(float64(cnt), 1.0/temp)
+			weights[tok] = w
+			total += w
+		}
+
+		// Sample from scaled distribution
+		r := rand.Float64() * total
+		for tok, w := range weights {
+			r -= w
 			if r < 0 {
 				return tok
 			}
@@ -67,14 +73,14 @@ func Sample(idx *suffixarray.Index, context string) string {
 }
 
 // Generate generates text by repeatedly sampling the next token
-func Generate(idx *suffixarray.Index, prompt string, maxTokens int) string {
+func Generate(idx *suffixarray.Index, prompt string, maxTokens int, temp float64) string {
 	result := prompt
 	for i := 0; i < maxTokens; i++ {
 		contextStart := 0
 		if len(result) > 200 {
 			contextStart = len(result) - 200
 		}
-		token := Sample(idx, result[contextStart:])
+		token := Sample(idx, result[contextStart:], temp)
 		if token == "" {
 			break
 		}
@@ -90,5 +96,5 @@ func main() {
 		os.Exit(1)
 	}
 	idx := suffixarray.New(data)
-	fmt.Println(Generate(idx, "MARCIUS:", 1000))
+	fmt.Println(Generate(idx, "MARCIUS:", 1000, 0.8))
 }

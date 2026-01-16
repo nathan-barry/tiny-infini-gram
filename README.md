@@ -15,3 +15,5 @@ wget https://github.com/nathan-barry/tiny-diffusion/releases/download/v2.0.0/dat
 # Run
 go run main.go
 ```
+
+The file generates 1000 characters and uses a sampling temperature of `0.8` by default. These (and the initial prompt) can be changed in the main function.
