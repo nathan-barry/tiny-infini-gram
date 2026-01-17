@@ -17,12 +17,13 @@ type Level struct {
 }
 
 // Sample returns the next byte sampled from k n-gram levels, plus the n used at each level.
+// k=-1 uses all levels (down to n=1).
 func Sample(idx *suffixarray.Index, context string, temp float64, k int) (byte, []int) {
 	data := idx.Bytes()
 	var levels []Level
 	lastNumMatches := 0
 
-	for i := 0; i < len(context) && len(levels) < k; i++ {
+	for i := 0; i < len(context) && (k < 0 || len(levels) < k); i++ {
 		offsets := idx.Lookup([]byte(context[i:]), -1)
 		if len(offsets) == 0 {
 			continue
@@ -77,7 +78,7 @@ func Sample(idx *suffixarray.Index, context string, temp float64, k int) (byte, 
 // Generate produces text and returns stats (mean, std) for n at each level.
 func Generate(idx *suffixarray.Index, prompt string, maxChars int, temp float64, k int) (string, []struct{ Mean, Std float64 }) {
 	result := []byte(prompt)
-	levelNs := make([][]int, k)
+	var levelNs [][]int
 
 	for len(result) < maxChars {
 		start := max(0, len(result)-200)
@@ -87,11 +88,14 @@ func Generate(idx *suffixarray.Index, prompt string, maxChars int, temp float64,
 		}
 		result = append(result, ch)
 		for i, n := range ns {
+			for len(levelNs) <= i {
+				levelNs = append(levelNs, nil)
+			}
 			levelNs[i] = append(levelNs[i], n)
 		}
 	}
 
-	stats := make([]struct{ Mean, Std float64 }, k)
+	stats := make([]struct{ Mean, Std float64 }, len(levelNs))
 	for i, vals := range levelNs {
 		if len(vals) == 0 {
 			continue
