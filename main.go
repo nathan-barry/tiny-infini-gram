@@ -117,7 +117,7 @@ func Generate(idx *suffixarray.Index, prompt string, maxChars int, temp float64,
 func main() {
 	data, _ := os.ReadFile("data.txt")
 	idx := suffixarray.New(data)
-	k := 3
+	k := 2
 
 	start := time.Now()
 	output, stats := Generate(idx, "First Citizen:", 1000, 0.8, k)
