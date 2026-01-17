@@ -48,13 +48,13 @@ func Sample(idx *suffixarray.Index, context string, temp float64, k int) (byte, 
 		return 0, nil
 	}
 
-	// Combine distributions: weight by log(maxNumMatches)/log(numMatches)
+	// Combine distributions: exponential decay by level index
 	combined := make(map[byte]float64)
-	maxNumMatches := float64(levels[len(levels)-1].numMatches)
 	nValues := make([]int, len(levels))
+	decay := 0.1
 	for i, lvl := range levels {
 		nValues[i] = lvl.n
-		w := math.Log(maxNumMatches+1) / math.Max(1, math.Log(float64(lvl.numMatches)+1))
+		w := math.Pow(decay, float64(i))
 		for ch, cnt := range lvl.counts {
 			combined[ch] += w * float64(cnt)
 		}
@@ -117,7 +117,7 @@ func Generate(idx *suffixarray.Index, prompt string, maxChars int, temp float64,
 func main() {
 	data, _ := os.ReadFile("data.txt")
 	idx := suffixarray.New(data)
-	k := 2
+	k := 3
 
 	start := time.Now()
 	output, stats := Generate(idx, "First Citizen:", 1000, 0.8, k)
