@@ -10,18 +10,17 @@ import (
 	"time"
 )
 
-// Level represents an n-gram match level.
-type Level struct {
-	counts     map[byte]int // next char -> frequency
-	numMatches int          // total matches at this level
-	n          int          // context length (n-gram size)
-}
-
-// Sample returns the next byte sampled from k n-gram levels, plus the n and numMatches at each level.
+// buildDistribution builds the combined probability distribution from n-gram levels.
+// Returns the unnormalized distribution and per-level stats (n values and match counts).
 // k=-1 uses all levels (down to n=1).
-func Sample(idx *suffixarray.Index, context string, temp float64, k int) (byte, []int, []int) {
+func buildDistribution(idx *suffixarray.Index, context string, k int) (map[byte]float64, []int, []int) {
 	data := idx.Bytes()
-	var levels []Level
+	type level struct {
+		counts     map[byte]int
+		numMatches int
+		n          int
+	}
+	var levels []level
 	lastNumMatches := 0
 
 	for i := 0; i < len(context) && (k < 0 || len(levels) < k); i++ {
@@ -41,15 +40,15 @@ func Sample(idx *suffixarray.Index, context string, temp float64, k int) (byte, 
 			numMatches += c
 		}
 		if numMatches > lastNumMatches {
-			levels = append(levels, Level{counts, numMatches, n})
+			levels = append(levels, level{counts, numMatches, n})
 			lastNumMatches = numMatches
 		}
 	}
 	if len(levels) == 0 {
-		return 0, nil, nil
+		return nil, nil, nil
 	}
 
-	// Combine distributions: exponential decay by level index
+	// Combine distributions with exponential decay
 	combined := make(map[byte]float64)
 	nValues := make([]int, len(levels))
 	matchCounts := make([]int, len(levels))
@@ -61,6 +60,15 @@ func Sample(idx *suffixarray.Index, context string, temp float64, k int) (byte, 
 		for ch, cnt := range lvl.counts {
 			combined[ch] += w * float64(cnt)
 		}
+	}
+	return combined, nValues, matchCounts
+}
+
+// Sample returns the next byte sampled from k n-gram levels, plus the n and numMatches at each level.
+func Sample(idx *suffixarray.Index, context string, temp float64, k int) (byte, []int, []int) {
+	combined, nValues, matchCounts := buildDistribution(idx, context, k)
+	if combined == nil {
+		return 0, nil, nil
 	}
 
 	// Apply temperature and sample
@@ -148,9 +156,50 @@ func meanStdMedian(vals []int) (float64, float64, float64) {
 	return mean, math.Sqrt(varSum / float64(len(vals))), median
 }
 
+// Perplexity computes perplexity on the given text.
+func Perplexity(idx *suffixarray.Index, text string, k int, contextLen int) float64 {
+	var logProbSum float64
+	var count int
+
+	for i := 1; i < len(text); i++ {
+		start := max(0, i-contextLen)
+		context := text[start:i]
+
+		dist, _, _ := buildDistribution(idx, context, k)
+		if dist == nil {
+			logProbSum += math.Log(1e-10)
+			count++
+			continue
+		}
+
+		// Normalize to probabilities
+		var total float64
+		for _, w := range dist {
+			total += w
+		}
+		for ch := range dist {
+			dist[ch] /= total
+		}
+
+		p := dist[text[i]]
+		if p > 0 {
+			logProbSum += math.Log(p)
+		} else {
+			// Smoothing for unseen characters
+			logProbSum += math.Log(1e-10)
+		}
+		count++
+	}
+	return math.Exp(-logProbSum / float64(count))
+}
+
 func main() {
 	data, _ := os.ReadFile("data.txt")
-	idx := suffixarray.New(data)
+
+	trainData := data[:len(data)-500]
+	valData := data[len(data)-500:]
+
+	idx := suffixarray.New(trainData)
 	k := 2
 
 	start := time.Now()
@@ -163,4 +212,10 @@ func main() {
 				i+1, s.NMedian, s.NMean, s.NStd, s.MatchMedian, s.MatchMean, s.MatchStd)
 		}
 	}
+
+	// Compute perplexity on validation set with k=-1 (all levels)
+	fmt.Printf("\nComputing perplexity on %d val chars...\n", len(valData))
+	start = time.Now()
+	ppl := Perplexity(idx, string(valData), -1, 200)
+	fmt.Printf("Perplexity (k=-1): %.2f (took %.2fs)\n", ppl, time.Since(start).Seconds())
 }

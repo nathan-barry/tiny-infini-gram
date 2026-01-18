@@ -1,6 +1,7 @@
 # Code takes heavy inspiration from Andrej Karpathy's two implementations:
 # nanochat: https://github.com/karpathy/nanochat/blob/master/nanochat/gpt.py
 # "Let's build GPT" video: https://github.com/karpathy/ng-video-lecture/blob/master/gpt.py
+import math
 import os
 import sys
 import time
@@ -50,11 +51,9 @@ def decode(l):
     return "".join([itos[n] for n in l])
 
 
-# Train and test splits
 data = torch.tensor(encode(text), dtype=torch.long)
-n = int(0.9 * len(data))  # first 90% will be train, rest val
-train_data = data[:n]
-val_data = data[n:]
+train_data = data[:-500]
+val_data = data[-500:]
 
 
 # data loading
@@ -257,6 +256,28 @@ def estimate_loss():
     return out
 
 
+@torch.no_grad()
+def compute_perplexity(model, data):
+    """Compute perplexity using model's built-in loss computation."""
+    model.eval()
+    total_loss = 0.0
+    total_tokens = 0
+
+    # Process in non-overlapping chunks
+    for i in range(0, len(data) - 1, block_size):
+        end = min(i + block_size, len(data) - 1)
+        x = data[i:end].unsqueeze(0).to(device)
+        y = data[i + 1 : end + 1].unsqueeze(0).to(device)
+        _, loss = model(x, y)
+        chunk_len = end - i
+        total_loss += loss.item() * chunk_len
+        total_tokens += chunk_len
+
+    avg_loss = total_loss / total_tokens
+    model.train()
+    return math.exp(avg_loss)
+
+
 if __name__ == "__main__":
     train_flag = "--train" in sys.argv
     weights_path = "weights/gpt.pt"
@@ -310,3 +331,11 @@ if __name__ == "__main__":
     output = generate(m, max_new_tokens=1500, prompt_len=14, temp=0.8)
     print(f"Total generation time: {time.time() - start:.2f} seconds")
     print(f"\nOutput:\n{output}")
+
+    # Compute perplexity on validation set
+    print(f"\nComputing perplexity on {len(val_data)} val tokens...")
+    losses = estimate_loss()
+    print(f"Val loss (estimate_loss): {losses['val']:.4f}, perplexity: {math.exp(losses['val']):.2f}")
+    start = time.time()
+    ppl = compute_perplexity(m, val_data)
+    print(f"Perplexity (compute_perplexity): {ppl:.2f} (took {time.time() - start:.2f}s)")
