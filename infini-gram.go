@@ -196,11 +196,12 @@ func Perplexity(idx *suffixarray.Index, text string, k int, contextLen int) floa
 func main() {
 	data, _ := os.ReadFile("data.txt")
 
-	trainData := data[:len(data)-500]
-	valData := data[len(data)-500:]
+	n := int(float64(len(data)) * 0.9)
+	trainData := data[:n]
+	valData := data[n:]
 
 	idx := suffixarray.New(trainData)
-	k := 2
+	k := -1
 
 	start := time.Now()
 	output, stats := Generate(idx, "First Citizen:", 1000, 0.8, k)
@@ -216,6 +217,6 @@ func main() {
 	// Compute perplexity on validation set with k=-1 (all levels)
 	fmt.Printf("\nComputing perplexity on %d val chars...\n", len(valData))
 	start = time.Now()
-	ppl := Perplexity(idx, string(valData), -1, 200)
-	fmt.Printf("Perplexity (k=-1): %.2f (took %.2fs)\n", ppl, time.Since(start).Seconds())
+	ppl := Perplexity(idx, string(valData), k, 100)
+	fmt.Printf("Perplexity (k=%d): %.2f (took %.2fs)\n", k, ppl, time.Since(start).Seconds())
 }

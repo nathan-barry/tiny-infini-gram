@@ -52,8 +52,9 @@ def decode(l):
 
 
 data = torch.tensor(encode(text), dtype=torch.long)
-train_data = data[:-500]
-val_data = data[-500:]
+n = int(0.9 * len(data))
+train_data = data[:n]
+val_data = data[n:]
 
 
 # data loading
@@ -251,31 +252,10 @@ def estimate_loss():
             X, Y = get_batch(split)
             _, loss = model(X, Y)
             losses[k] = loss.item()
-        out[split] = losses.mean()
+        avg_loss = losses.mean().item()
+        out[split] = {"loss": avg_loss, "ppl": math.exp(avg_loss)}
     model.train()
     return out
-
-
-@torch.no_grad()
-def compute_perplexity(model, data):
-    """Compute perplexity using model's built-in loss computation."""
-    model.eval()
-    total_loss = 0.0
-    total_tokens = 0
-
-    # Process in non-overlapping chunks
-    for i in range(0, len(data) - 1, block_size):
-        end = min(i + block_size, len(data) - 1)
-        x = data[i:end].unsqueeze(0).to(device)
-        y = data[i + 1 : end + 1].unsqueeze(0).to(device)
-        _, loss = model(x, y)
-        chunk_len = end - i
-        total_loss += loss.item() * chunk_len
-        total_tokens += chunk_len
-
-    avg_loss = total_loss / total_tokens
-    model.train()
-    return math.exp(avg_loss)
 
 
 if __name__ == "__main__":
@@ -303,10 +283,11 @@ if __name__ == "__main__":
         for iter in range(max_iters):
             # every once in a while evaluate the loss on train and val sets
             if iter % eval_interval == 0 or iter == max_iters - 1:
-                losses = estimate_loss()
+                stats = estimate_loss()
                 print(
-                    f"step {iter}: train loss {losses['train']:.4f},"
-                    f"val loss {losses['val']:.4f}, time {time.time() - start:.2f} seconds"
+                    f"step {iter}: train loss {stats['train']['loss']:.4f} ppl {stats['train']['ppl']:.2f},"
+                    f" val loss {stats['val']['loss']:.4f} ppl {stats['val']['ppl']:.2f},"
+                    f" time {time.time() - start:.2f}s"
                 )
                 # Generate a sample
                 sample = generate(m, max_new_tokens=240)
@@ -332,10 +313,7 @@ if __name__ == "__main__":
     print(f"Total generation time: {time.time() - start:.2f} seconds")
     print(f"\nOutput:\n{output}")
 
-    # Compute perplexity on validation set
-    print(f"\nComputing perplexity on {len(val_data)} val tokens...")
-    losses = estimate_loss()
-    print(f"Val loss (estimate_loss): {losses['val']:.4f}, perplexity: {math.exp(losses['val']):.2f}")
-    start = time.time()
-    ppl = compute_perplexity(m, val_data)
-    print(f"Perplexity (compute_perplexity): {ppl:.2f} (took {time.time() - start:.2f}s)")
+    # Compute perplexity
+    stats = estimate_loss()
+    print(f"\nTrain: loss {stats['train']['loss']:.4f}, ppl {stats['train']['ppl']:.2f}")
+    print(f"Val: loss {stats['val']['loss']:.4f}, ppl {stats['val']['ppl']:.2f}")
