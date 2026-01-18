@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/rand"
 	"os"
+	"sort"
 	"time"
 )
 
@@ -16,9 +17,9 @@ type Level struct {
 	n          int          // context length (n-gram size)
 }
 
-// Sample returns the next byte sampled from k n-gram levels, plus the n used at each level.
+// Sample returns the next byte sampled from k n-gram levels, plus the n and numMatches at each level.
 // k=-1 uses all levels (down to n=1).
-func Sample(idx *suffixarray.Index, context string, temp float64, k int) (byte, []int) {
+func Sample(idx *suffixarray.Index, context string, temp float64, k int) (byte, []int, []int) {
 	data := idx.Bytes()
 	var levels []Level
 	lastNumMatches := 0
@@ -45,15 +46,17 @@ func Sample(idx *suffixarray.Index, context string, temp float64, k int) (byte, 
 		}
 	}
 	if len(levels) == 0 {
-		return 0, nil
+		return 0, nil, nil
 	}
 
 	// Combine distributions: exponential decay by level index
 	combined := make(map[byte]float64)
 	nValues := make([]int, len(levels))
+	matchCounts := make([]int, len(levels))
 	decay := 0.1
 	for i, lvl := range levels {
 		nValues[i] = lvl.n
+		matchCounts[i] = lvl.numMatches
 		w := math.Pow(decay, float64(i))
 		for ch, cnt := range lvl.counts {
 			combined[ch] += w * float64(cnt)
@@ -69,20 +72,27 @@ func Sample(idx *suffixarray.Index, context string, temp float64, k int) (byte, 
 	r := rand.Float64() * total
 	for ch, w := range combined {
 		if r -= w; r < 0 {
-			return ch, nValues
+			return ch, nValues, matchCounts
 		}
 	}
-	return 0, nil
+	return 0, nil, nil
 }
 
-// Generate produces text and returns stats (mean, std) for n at each level.
-func Generate(idx *suffixarray.Index, prompt string, maxChars int, temp float64, k int) (string, []struct{ Mean, Std float64 }) {
+// LevelStats holds mean, std, and median for n and numMatches at a level.
+type LevelStats struct {
+	NMean, NStd, NMedian           float64
+	MatchMean, MatchStd, MatchMedian float64
+}
+
+// Generate produces text and returns stats for n and numMatches at each level.
+func Generate(idx *suffixarray.Index, prompt string, maxChars int, temp float64, k int) (string, []LevelStats) {
 	result := []byte(prompt)
 	var levelNs [][]int
+	var levelMatches [][]int
 
 	for len(result) < maxChars {
 		start := max(0, len(result)-200)
-		ch, ns := Sample(idx, string(result[start:]), temp, k)
+		ch, ns, matches := Sample(idx, string(result[start:]), temp, k)
 		if ch == 0 {
 			break
 		}
@@ -93,25 +103,49 @@ func Generate(idx *suffixarray.Index, prompt string, maxChars int, temp float64,
 			}
 			levelNs[i] = append(levelNs[i], n)
 		}
+		for i, m := range matches {
+			for len(levelMatches) <= i {
+				levelMatches = append(levelMatches, nil)
+			}
+			levelMatches[i] = append(levelMatches[i], m)
+		}
 	}
 
-	stats := make([]struct{ Mean, Std float64 }, len(levelNs))
-	for i, vals := range levelNs {
-		if len(vals) == 0 {
-			continue
+	stats := make([]LevelStats, max(len(levelNs), len(levelMatches)))
+	for i := range stats {
+		if i < len(levelNs) && len(levelNs[i]) > 0 {
+			stats[i].NMean, stats[i].NStd, stats[i].NMedian = meanStdMedian(levelNs[i])
 		}
-		var sum int
-		for _, v := range vals {
-			sum += v
+		if i < len(levelMatches) && len(levelMatches[i]) > 0 {
+			stats[i].MatchMean, stats[i].MatchStd, stats[i].MatchMedian = meanStdMedian(levelMatches[i])
 		}
-		mean := float64(sum) / float64(len(vals))
-		var varSum float64
-		for _, v := range vals {
-			varSum += (float64(v) - mean) * (float64(v) - mean)
-		}
-		stats[i] = struct{ Mean, Std float64 }{mean, math.Sqrt(varSum / float64(len(vals)))}
 	}
 	return string(result), stats
+}
+
+func meanStdMedian(vals []int) (float64, float64, float64) {
+	if len(vals) == 0 {
+		return 0, 0, 0
+	}
+	var sum int
+	for _, v := range vals {
+		sum += v
+	}
+	mean := float64(sum) / float64(len(vals))
+	var varSum float64
+	for _, v := range vals {
+		varSum += (float64(v) - mean) * (float64(v) - mean)
+	}
+	sorted := make([]int, len(vals))
+	copy(sorted, vals)
+	sort.Ints(sorted)
+	var median float64
+	if len(sorted)%2 == 0 {
+		median = float64(sorted[len(sorted)/2-1]+sorted[len(sorted)/2]) / 2
+	} else {
+		median = float64(sorted[len(sorted)/2])
+	}
+	return mean, math.Sqrt(varSum / float64(len(vals))), median
 }
 
 func main() {
@@ -124,8 +158,9 @@ func main() {
 	fmt.Println(output)
 	fmt.Printf("\nGenerated %d chars in %.4fs\n", len(output), time.Since(start).Seconds())
 	for i, s := range stats {
-		if s.Mean > 0 {
-			fmt.Printf("  Level %d: mean=%.2f, std=%.2f\n", i+1, s.Mean, s.Std)
+		if s.NMean > 0 {
+			fmt.Printf("  Level %d: n(med=%.1f, avg=%.2f, std=%.2f) m(med=%.1f, avg=%.1f, std=%.1f)\n",
+				i+1, s.NMedian, s.NMean, s.NStd, s.MatchMedian, s.MatchMean, s.MatchStd)
 		}
 	}
 }
