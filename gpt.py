@@ -285,13 +285,13 @@ if __name__ == "__main__":
             if iter % eval_interval == 0 or iter == max_iters - 1:
                 stats = estimate_loss()
                 print(
-                    f"step {iter}: train loss {stats['train']['loss']:.4f} ppl {stats['train']['ppl']:.2f},"
-                    f" val loss {stats['val']['loss']:.4f} ppl {stats['val']['ppl']:.2f},"
+                    f"step {iter}: train(loss={stats['train']['loss']:.4f}, ppl={stats['train']['ppl']:.2f}),"
+                    f" val(loss={stats['val']['loss']:.4f}, ppl={stats['val']['ppl']:.2f}),"
                     f" time {time.time() - start:.2f}s"
                 )
                 # Generate a sample
-                sample = generate(m, max_new_tokens=240)
-                print(f"Sample:\n{sample}\n")
+                sample = generate(m, max_new_tokens=200)
+                print(f"{sample}\n")
 
             # sample a batch of data
             xb, yb = get_batch("train")
