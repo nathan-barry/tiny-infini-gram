@@ -2,6 +2,8 @@
 
 A minimal implementation of the [Infini-gram](https://arxiv.org/abs/2401.17377) language model using Go's built-in suffix array, plus a character-level GPT for comparison.
 
+![Infini-gram vs GPT](https://nathan.rs/images/unbounded-n-gram.gif)
+
 ## How it works
 
 Instead of using a fixed n-gram size, infini-gram finds multiple suffix matches of varying lengths in the training data and combines their next-token distributions using exponential decay weighting. Longer matches (higher n) are weighted more heavily. The `k` parameter controls how many n-gram levels to use (`k=2` by default, `k=-1` uses all levels).
