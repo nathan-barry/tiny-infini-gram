@@ -88,7 +88,7 @@ func Sample(idx *suffixarray.Index, context string, temp float64, k int) (byte, 
 
 // LevelStats holds mean, std, and median for n and numMatches at a level.
 type LevelStats struct {
-	NMean, NStd, NMedian           float64
+	NMean, NStd, NMedian             float64
 	MatchMean, MatchStd, MatchMedian float64
 }
 
@@ -193,15 +193,29 @@ func Perplexity(idx *suffixarray.Index, text string, k int, contextLen int) floa
 	return math.Exp(-logProbSum / float64(count))
 }
 
+func measurePerplexity(idx *suffixarray.Index, trainData, valData []byte, k int) {
+	// Compute perplexity on validation set with k=-1 (all levels)
+	fmt.Printf("\nComputing perplexity on %d val chars...\n", len(valData))
+	start := time.Now()
+	ppl := Perplexity(idx, string(valData), k, 100)
+	fmt.Printf("Validation Perplexity (k=%d): %.2f (took %.2fs)\n", k, ppl, time.Since(start).Seconds())
+
+	// Compute perplexity on train set with k=-1 (all levels)
+	fmt.Printf("\nComputing perplexity on %d train chars...\n", len(trainData))
+	start = time.Now()
+	ppl = Perplexity(idx, string(trainData), k, 100)
+	fmt.Printf("Train Perplexity (k=%d): %.2f (took %.2fs)\n", k, ppl, time.Since(start).Seconds())
+}
+
 func main() {
 	data, _ := os.ReadFile("data.txt")
 
 	n := int(float64(len(data)) * 0.9)
 	trainData := data[:n]
-	valData := data[n:]
+	// valData := data[n:]
 
 	idx := suffixarray.New(trainData)
-	k := -1
+	k := 3
 
 	start := time.Now()
 	output, stats := Generate(idx, "First Citizen:", 1000, 0.8, k)
@@ -214,9 +228,5 @@ func main() {
 		}
 	}
 
-	// Compute perplexity on validation set with k=-1 (all levels)
-	fmt.Printf("\nComputing perplexity on %d val chars...\n", len(valData))
-	start = time.Now()
-	ppl := Perplexity(idx, string(valData), k, 100)
-	fmt.Printf("Perplexity (k=%d): %.2f (took %.2fs)\n", k, ppl, time.Since(start).Seconds())
+	// measurePerplexity(idx, trainData, valData, k)
 }

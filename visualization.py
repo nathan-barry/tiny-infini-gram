@@ -55,11 +55,15 @@ def generate_infinigram(target_chars: int) -> tuple[str, float]:
 @torch.no_grad()
 def generate_gpt(target_chars: int) -> tuple[str, float]:
     """Run GPT generation and return (output, generation_time)."""
-    weights_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "weights/gpt.pt")
+    weights_path = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "weights/gpt.pt"
+    )
 
     model = Model()
     model = model.to(device)
-    model.load_state_dict(torch.load(weights_path, map_location=device, weights_only=True))
+    model.load_state_dict(
+        torch.load(weights_path, map_location=device, weights_only=True)
+    )
     model.eval()
 
     x = data[:PROMPT_LEN].unsqueeze(0).to(device)
@@ -124,7 +128,7 @@ def animate_generation(
     left_time: float,
     right_time: float,
     left_title: str = "Infini-gram",
-    right_title: str = "GPT",
+    right_title: str = "NanoGPT",
 ):
     """Animate both outputs word by word using matplotlib."""
     left_words = split_into_words(left_output)
@@ -151,32 +155,56 @@ def animate_generation(
         ax.set_ylim(0, 1)
         ax.axis("off")
 
-    ax_left.set_title(f"{left_title}\n(Generated in {left_time:.2f}s)", fontsize=12, fontweight="bold")
-    ax_right.set_title(f"{right_title}\n(Generated in {right_time:.2f}s)", fontsize=12, fontweight="bold")
+    ax_left.set_title(
+        f"{left_title}\n(Generated in {left_time:.2f}s)", fontsize=12, fontweight="bold"
+    )
+    ax_right.set_title(
+        f"{right_title}\n(Generated in {right_time:.2f}s)",
+        fontsize=12,
+        fontweight="bold",
+    )
 
     # Text objects
     left_text_obj = ax_left.text(
-        0.02, 0.98, "", transform=ax_left.transAxes,
-        fontsize=9, fontfamily="monospace",
-        verticalalignment="top", horizontalalignment="left",
-        wrap=True
+        0.02,
+        0.98,
+        "",
+        transform=ax_left.transAxes,
+        fontsize=9,
+        fontfamily="monospace",
+        verticalalignment="top",
+        horizontalalignment="left",
+        wrap=True,
     )
     right_text_obj = ax_right.text(
-        0.02, 0.98, "", transform=ax_right.transAxes,
-        fontsize=9, fontfamily="monospace",
-        verticalalignment="top", horizontalalignment="left",
-        wrap=True
+        0.02,
+        0.98,
+        "",
+        transform=ax_right.transAxes,
+        fontsize=9,
+        fontfamily="monospace",
+        verticalalignment="top",
+        horizontalalignment="left",
+        wrap=True,
     )
 
     # Speed indicator text (centered at bottom of figure)
     speed_text = fig.text(
-        0.5, 0.02, "", ha="center", va="bottom",
-        fontsize=16, fontweight="bold", color="red"
+        0.5,
+        0.02,
+        "",
+        ha="center",
+        va="bottom",
+        fontsize=16,
+        fontweight="bold",
+        color="red",
     )
 
     # Add boxes around text areas
     for ax in (ax_left, ax_right):
-        ax.add_patch(plt.Rectangle((0, 0), 1, 1, fill=False, edgecolor="gray", linewidth=1))
+        ax.add_patch(
+            plt.Rectangle((0, 0), 1, 1, fill=False, edgecolor="gray", linewidth=1)
+        )
 
     # State for animation
     pause_duration = 2.0  # seconds to pause before restarting
@@ -269,7 +297,9 @@ def animate_generation(
         right_text_obj.set_text(wrap_text(state["right_text"], 55))
 
         # Mark finished when both are done
-        if state["left_idx"] >= len(left_words) and state["right_idx"] >= len(right_words):
+        if state["left_idx"] >= len(left_words) and state["right_idx"] >= len(
+            right_words
+        ):
             if not state["finished"]:
                 state["finished"] = True
                 state["finish_time"] = time.perf_counter()
@@ -279,8 +309,13 @@ def animate_generation(
 
     # Create animation (interval in ms, blit=False needed for fig.text)
     ani = animation.FuncAnimation(
-        fig, update, init_func=init,
-        frames=None, interval=33, blit=False, cache_frame_data=False
+        fig,
+        update,
+        init_func=init,
+        frames=None,
+        interval=33,
+        blit=False,
+        cache_frame_data=False,
     )
 
     plt.tight_layout()
@@ -296,7 +331,7 @@ def main():
     infinigram_output, infinigram_time = generate_infinigram(TARGET_CHARS)
     print(f"  Done in {infinigram_time:.2f}s ({len(infinigram_output)} chars)")
 
-    print("Running GPT (Python)...")
+    print("Running nanoGPT (Python)...")
     gpt_output, gpt_time = generate_gpt(TARGET_CHARS)
     print(f"  Done in {gpt_time:.2f}s ({len(gpt_output)} chars)")
 
